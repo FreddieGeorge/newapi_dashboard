@@ -1,0 +1,1225 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>成员使用统计</title>
+  <script src="vendor/echarts.min.js"></script>
+  <script src="vendor/papaparse.min.js"></script>
+  <style>
+    :root {
+      color-scheme: light;
+      --page: #f4f6f5;
+      --surface: #ffffff;
+      --surface-alt: #eef2f0;
+      --text: #17221f;
+      --muted: #66736f;
+      --border: #d8e0dd;
+      --green: #176b5b;
+      --blue: #2563a6;
+      --amber: #bd6b18;
+      --red: #b54545;
+      --shadow: 0 1px 2px rgba(23, 34, 31, 0.06);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--page);
+      color: var(--text);
+      font-family: Inter, "Segoe UI", "Microsoft YaHei", Arial, sans-serif;
+      font-size: 14px;
+      letter-spacing: 0;
+    }
+
+    button, input, select { font: inherit; letter-spacing: 0; }
+
+    .shell {
+      width: min(1440px, 100%);
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 20px;
+      margin-bottom: 20px;
+    }
+
+    h1 {
+      margin: 0 0 5px;
+      font-size: 24px;
+      line-height: 1.25;
+      font-weight: 600;
+    }
+
+    .subtitle, .status, .section-meta {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .status-wrap {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-height: 36px;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--green);
+      flex: 0 0 auto;
+    }
+
+    .status-dot.loading { background: var(--amber); }
+    .status-dot.error { background: var(--red); }
+
+    .filters {
+      display: grid;
+      grid-template-columns: minmax(180px, 0.8fr) repeat(3, minmax(150px, 1fr));
+      gap: 12px;
+      padding: 16px 0;
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 18px;
+    }
+
+    .field { min-width: 0; }
+
+    .field label {
+      display: block;
+      margin-bottom: 6px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .field input, .field select {
+      width: 100%;
+      height: 38px;
+      padding: 0 10px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--surface);
+      color: var(--text);
+      outline: none;
+    }
+
+    .field input:focus, .field select:focus {
+      border-color: var(--blue);
+      box-shadow: 0 0 0 3px rgba(37, 99, 166, 0.14);
+    }
+
+    .mode-switch {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 3px;
+      height: 38px;
+      padding: 3px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--surface-alt);
+    }
+
+    .mode-button {
+      min-width: 0;
+      border: 0;
+      border-radius: 4px;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+    }
+
+    .mode-button[aria-pressed="true"] {
+      background: var(--surface);
+      color: var(--text);
+      box-shadow: var(--shadow);
+      font-weight: 600;
+    }
+
+    .hidden { display: none !important; }
+
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 28px;
+    }
+
+    .metric {
+      min-width: 0;
+      padding: 16px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--surface);
+      box-shadow: var(--shadow);
+    }
+
+    .metric-label {
+      margin-bottom: 8px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .metric-value {
+      overflow-wrap: anywhere;
+      font-size: 25px;
+      line-height: 1.2;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .metric-context {
+      margin-top: 7px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .chart-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.6fr) minmax(300px, 1fr);
+      gap: 28px;
+      margin-bottom: 30px;
+    }
+
+    .section {
+      min-width: 0;
+      padding-top: 17px;
+      border-top: 1px solid var(--border);
+    }
+
+    .section-header {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+
+    h2 {
+      margin: 0;
+      font-size: 16px;
+      line-height: 1.4;
+      font-weight: 600;
+    }
+
+    .chart {
+      width: 100%;
+      height: 350px;
+    }
+
+    .chart-wide {
+      height: 330px;
+      margin-bottom: 30px;
+    }
+
+    .frequency-section { margin-bottom: 30px; }
+
+    .frequency-header-actions {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 14px;
+      min-width: 0;
+    }
+
+    .frequency-metric-switch {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      width: 250px;
+      height: 32px;
+      padding: 2px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--surface-alt);
+      flex: 0 0 auto;
+    }
+
+    .frequency-metric-button {
+      min-width: 0;
+      padding: 0 8px;
+      border: 0;
+      border-radius: 4px;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 12px;
+    }
+
+    .frequency-metric-button[aria-pressed="true"] {
+      background: var(--surface);
+      color: var(--text);
+      box-shadow: var(--shadow);
+      font-weight: 600;
+    }
+
+    .frequency-scroll {
+      width: 100%;
+      overflow-x: auto;
+      overflow-y: hidden;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+    }
+
+    .frequency-chart {
+      width: 100%;
+      min-width: 270px;
+      height: 195px;
+    }
+
+    .frequency-scroll.is-month {
+      width: min(272px, 100%);
+      margin-inline: auto;
+    }
+
+    .frequency-scroll.is-year {
+      width: min(902px, 100%);
+      margin-inline: auto;
+    }
+
+    .frequency-chart.is-year {
+      min-width: 900px;
+      height: 150px;
+    }
+
+    .frequency-legend {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 5px;
+      padding: 0 16px 12px;
+      color: var(--muted);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .frequency-swatch {
+      width: 12px;
+      height: 12px;
+      border: 1px solid rgba(23, 34, 31, 0.06);
+      border-radius: 2px;
+    }
+
+    .error {
+      display: none;
+      margin-bottom: 16px;
+      padding: 12px 14px;
+      border-left: 3px solid var(--red);
+      background: #fff1f1;
+      color: #7e2929;
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 840px;
+    }
+
+    th, td {
+      padding: 11px 13px;
+      border-bottom: 1px solid var(--border);
+      text-align: left;
+      vertical-align: middle;
+    }
+
+    th {
+      background: var(--surface-alt);
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    tbody tr:last-child td { border-bottom: 0; }
+    tbody tr:hover { background: #f7faf9; }
+
+    .number {
+      text-align: right;
+      white-space: nowrap;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .member-button {
+      padding: 0;
+      border: 0;
+      background: transparent;
+      color: var(--blue);
+      cursor: pointer;
+      font-weight: 600;
+    }
+
+    .member-button:hover { text-decoration: underline; }
+
+    .empty {
+      padding: 48px 16px;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    @media (max-width: 900px) {
+      .filters, .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .chart-grid { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 560px) {
+      .shell { padding: 16px; }
+      .topbar { align-items: flex-start; }
+      .status { display: none; }
+      .filters, .metrics { grid-template-columns: 1fr; }
+      .metric-value { font-size: 22px; }
+      .chart { height: 320px; }
+      .section-header { align-items: flex-start; flex-direction: column; }
+      .frequency-header-actions { width: 100%; align-items: flex-start; flex-direction: column; }
+      .frequency-metric-switch { width: min(100%, 300px); }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <div>
+        <h1>成员使用统计</h1>
+        <p class="subtitle" id="dataRange">正在读取数据...</p>
+      </div>
+      <div class="status-wrap">
+        <span class="status-dot loading" id="statusDot" aria-hidden="true"></span>
+        <span class="status" id="statusText">正在加载</span>
+      </div>
+    </header>
+
+    <div class="error" id="errorBox" role="alert"></div>
+
+    <section class="filters" aria-label="数据筛选">
+      <div class="field">
+        <label>统计周期</label>
+        <div class="mode-switch" role="group" aria-label="统计周期">
+          <button class="mode-button" id="monthModeButton" type="button" aria-pressed="true">按自然月</button>
+          <button class="mode-button" id="yearModeButton" type="button" aria-pressed="false">按年</button>
+        </div>
+      </div>
+      <div class="field" id="monthField">
+        <label for="monthFilter">自然月</label>
+        <select id="monthFilter"></select>
+      </div>
+      <div class="field hidden" id="yearField">
+        <label for="yearFilter">年份</label>
+        <select id="yearFilter"></select>
+      </div>
+      <div class="field">
+        <label for="memberFilter">成员</label>
+        <select id="memberFilter"><option value="">全部成员</option></select>
+      </div>
+      <div class="field">
+        <label for="modelFilter">模型</label>
+        <select id="modelFilter"><option value="">全部模型</option></select>
+      </div>
+    </section>
+
+    <section class="metrics" aria-label="汇总指标">
+      <article class="metric">
+        <div class="metric-label">总花费</div>
+        <div class="metric-value" id="totalCost">-</div>
+        <div class="metric-context" id="costContext">筛选范围内</div>
+      </article>
+      <article class="metric">
+        <div class="metric-label">请求次数</div>
+        <div class="metric-value" id="totalRequests">-</div>
+        <div class="metric-context" id="requestContext">筛选范围内</div>
+      </article>
+      <article class="metric">
+        <div class="metric-label">Token 总量</div>
+        <div class="metric-value" id="totalTokens">-</div>
+        <div class="metric-context" id="tokenContext">提示词 + 补全</div>
+      </article>
+      <article class="metric">
+        <div class="metric-label">活跃成员</div>
+        <div class="metric-value" id="activeMembers">-</div>
+        <div class="metric-context" id="memberContext">有请求的成员</div>
+      </article>
+    </section>
+
+    <div class="chart-grid">
+      <section class="section">
+        <div class="section-header">
+          <h2>成员花费排行</h2>
+          <p class="section-meta">按筛选范围汇总</p>
+        </div>
+        <div class="chart" id="memberCostChart" role="img" aria-label="成员花费排行图"></div>
+      </section>
+
+      <section class="section">
+        <div class="section-header">
+          <h2 id="modelChartTitle">模型花费构成</h2>
+          <p class="section-meta" id="modelChartMeta">点击左侧成员柱查看个人构成</p>
+        </div>
+        <div class="chart" id="modelChart" role="img" aria-label="模型花费构成图"></div>
+      </section>
+    </div>
+
+    <section class="section frequency-section">
+      <div class="section-header">
+        <h2>成员使用热力图</h2>
+        <div class="frequency-header-actions">
+          <div class="frequency-metric-switch" role="group" aria-label="热力图统计指标">
+            <button class="frequency-metric-button" type="button" data-frequency-metric="requests" aria-pressed="true">请求次数</button>
+            <button class="frequency-metric-button" type="button" data-frequency-metric="cost" aria-pressed="false">花费</button>
+            <button class="frequency-metric-button" type="button" data-frequency-metric="tokens" aria-pressed="false">Token</button>
+          </div>
+          <p class="section-meta" id="frequencyMeta">按每日请求次数统计</p>
+        </div>
+      </div>
+      <div class="frequency-scroll" id="frequencyScroll">
+        <div class="frequency-chart" id="frequencyChart" role="img" aria-label="成员每日使用热力图"></div>
+        <div class="frequency-legend" aria-hidden="true">
+          <span>少</span>
+          <span class="frequency-swatch" style="background:#edf2f3"></span>
+          <span class="frequency-swatch" style="background:#c7edf3"></span>
+          <span class="frequency-swatch" style="background:#7bd2df"></span>
+          <span class="frequency-swatch" style="background:#32b5c9"></span>
+          <span class="frequency-swatch" style="background:#009fb9"></span>
+          <span>多</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-header">
+        <h2 id="trendTitle">每日成员花费</h2>
+        <p class="section-meta">用于观察成员使用变化</p>
+      </div>
+      <div class="chart chart-wide" id="trendChart" role="img" aria-label="每日成员花费趋势图"></div>
+    </section>
+
+    <section class="section">
+      <div class="section-header">
+        <h2>成员明细</h2>
+        <p class="section-meta" id="tableMeta">-</p>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>成员</th>
+              <th class="number">请求次数</th>
+              <th class="number">花费</th>
+              <th class="number">提示词 Token</th>
+              <th class="number">补全 Token</th>
+              <th class="number">平均花费/请求</th>
+              <th class="number">平均耗时</th>
+              <th>主要模型</th>
+            </tr>
+          </thead>
+          <tbody id="memberTable"></tbody>
+        </table>
+        <div class="empty" id="emptyState" hidden>当前筛选条件下没有数据</div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    (() => {
+      'use strict';
+
+      const CATALOG_URL = 'data/index.json';
+      const REFRESH_INTERVAL_MS = 60000;
+      const COLORS = ['#176b5b', '#2563a6', '#bd6b18', '#8a4f91', '#b54545', '#54706a'];
+      const MEMBER_BAR_COLOR = '#009fb9';
+      const MODEL_COLORS = [MEMBER_BAR_COLOR, '#2563a6', '#bd6b18', '#8a4f91', '#b54545', '#54706a'];
+      const FREQUENCY_METRICS = Object.freeze({
+        requests: {
+          label: '请求次数',
+          value: () => 1,
+          summary: value => `${formatNumber(value)} 次请求`,
+          tooltip: value => `请求次数：${formatNumber(value)}`
+        },
+        cost: {
+          label: '花费',
+          value: row => row.cost,
+          summary: value => `花费 ${formatCost(value)}`,
+          tooltip: value => `花费：${formatCost(value)}`
+        },
+        tokens: {
+          label: 'Token',
+          value: row => row.prompt + row.completion,
+          summary: value => `Token ${formatCompact(value)}`,
+          tooltip: value => `Token：${formatNumber(value)}`
+        }
+      });
+      const MEMBER_ALIASES = Object.freeze({});
+      const FIELD = {
+        time: '时间',
+        type: '类型',
+        member: '令牌名称',
+        model: '模型名称',
+        cost: '花费',
+        prompt: '提示词tokens',
+        completion: '补全tokens',
+        latency: '请求耗时ms'
+      };
+
+      const elements = {
+        monthModeButton: document.getElementById('monthModeButton'),
+        yearModeButton: document.getElementById('yearModeButton'),
+        monthField: document.getElementById('monthField'),
+        yearField: document.getElementById('yearField'),
+        monthFilter: document.getElementById('monthFilter'),
+        yearFilter: document.getElementById('yearFilter'),
+        memberFilter: document.getElementById('memberFilter'),
+        modelFilter: document.getElementById('modelFilter'),
+        statusDot: document.getElementById('statusDot'),
+        statusText: document.getElementById('statusText'),
+        dataRange: document.getElementById('dataRange'),
+        errorBox: document.getElementById('errorBox'),
+        memberTable: document.getElementById('memberTable'),
+        tableMeta: document.getElementById('tableMeta'),
+        emptyState: document.getElementById('emptyState'),
+        trendTitle: document.getElementById('trendTitle'),
+        modelChartTitle: document.getElementById('modelChartTitle'),
+        modelChartMeta: document.getElementById('modelChartMeta'),
+        frequencyMetricButtons: [...document.querySelectorAll('[data-frequency-metric]')],
+        frequencyMeta: document.getElementById('frequencyMeta'),
+        frequencyScroll: document.getElementById('frequencyScroll'),
+        frequencyChart: document.getElementById('frequencyChart')
+      };
+
+      let allRows = [];
+      let charts = {};
+      let catalog = { months: [] };
+      let periodMode = 'month';
+      let modelMember = '';
+      let frequencyMetric = 'requests';
+
+      function parseTime(value) {
+        if (!value) return null;
+        const date = new Date(String(value).trim().replace(' ', 'T'));
+        return Number.isNaN(date.getTime()) ? null : date;
+      }
+
+      function numberValue(value) {
+        const number = Number(String(value ?? '').replace(/,/g, '').trim());
+        return Number.isFinite(number) ? number : 0;
+      }
+
+      function dateKey(date) {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+      }
+
+      function formatNumber(value, maximumFractionDigits = 0) {
+        return new Intl.NumberFormat('zh-CN', { maximumFractionDigits }).format(value);
+      }
+
+      function formatCost(value) {
+        return value.toLocaleString('zh-CN', {
+          minimumFractionDigits: 4,
+          maximumFractionDigits: 6
+        });
+      }
+
+      function formatCompact(value) {
+        return new Intl.NumberFormat('zh-CN', {
+          notation: 'compact',
+          maximumFractionDigits: 1
+        }).format(value);
+      }
+
+      function formatUpdatedAt(value) {
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) return '未知时间';
+        return new Intl.DateTimeFormat('zh-CN', {
+          timeZone: 'Asia/Shanghai',
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: false
+        }).format(date);
+      }
+
+      function escapeHtml(value) {
+        return String(value)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#039;');
+      }
+
+      function setStatus(type, text) {
+        elements.statusDot.className = `status-dot ${type === 'ok' ? '' : type}`.trim();
+        elements.statusText.textContent = text;
+      }
+
+      function showError(message) {
+        elements.errorBox.textContent = message;
+        elements.errorBox.style.display = 'block';
+      }
+
+      function clearError() {
+        elements.errorBox.style.display = 'none';
+        elements.errorBox.textContent = '';
+      }
+
+      function normalizeRow(row) {
+        const time = parseTime(row[FIELD.time]);
+        const rawMember = String(row[FIELD.member] ?? '').trim();
+        const member = MEMBER_ALIASES[rawMember.toLowerCase()] || rawMember || '未命名成员';
+        return {
+          time,
+          day: time ? dateKey(time) : '',
+          member,
+          model: String(row[FIELD.model] ?? '').trim() || '未知模型',
+          cost: numberValue(row[FIELD.cost]),
+          prompt: numberValue(row[FIELD.prompt]),
+          completion: numberValue(row[FIELD.completion]),
+          latency: numberValue(row[FIELD.latency])
+        };
+      }
+
+      function populateSelect(select, values, allLabel) {
+        const selected = select.value;
+        select.innerHTML = `<option value="">${allLabel}</option>` + values
+          .map(value => `<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`)
+          .join('');
+        if (values.includes(selected)) select.value = selected;
+      }
+
+      function monthLabel(value) {
+        const [year, month] = value.split('-');
+        return `${year}年${Number(month)}月`;
+      }
+
+      function initializePeriodSelectors() {
+        const previousMonth = elements.monthFilter.value;
+        const previousYear = elements.yearFilter.value;
+        const months = catalog.months
+          .filter(item => Number(item.rows) > 0)
+          .sort((a, b) => b.id.localeCompare(a.id));
+        const years = [...new Set(months.map(item => String(item.year)))].sort((a, b) => b.localeCompare(a));
+
+        elements.monthFilter.innerHTML = months
+          .map(item => `<option value="${escapeHtml(item.id)}">${monthLabel(item.id)}${item.complete ? '' : '（更新中）'}</option>`)
+          .join('');
+        elements.yearFilter.innerHTML = years
+          .map(year => `<option value="${escapeHtml(year)}">${year}年</option>`)
+          .join('');
+
+        if (months.some(item => item.id === previousMonth)) {
+          elements.monthFilter.value = previousMonth;
+        }
+        if (years.includes(previousYear)) {
+          elements.yearFilter.value = previousYear;
+        } else if (elements.monthFilter.value) {
+          elements.yearFilter.value = elements.monthFilter.value.slice(0, 4);
+        }
+      }
+
+      function initializeDimensionFilters() {
+        const validDates = allRows.map(row => row.time).filter(Boolean).sort((a, b) => a - b);
+        if (!validDates.length) return;
+
+        const minimum = dateKey(validDates[0]);
+        const maximum = dateKey(validDates[validDates.length - 1]);
+        const members = [...new Set(allRows.map(row => row.member))].sort((a, b) => a.localeCompare(b, 'zh-CN'));
+        const models = [...new Set(allRows.map(row => row.model))].sort((a, b) => a.localeCompare(b, 'zh-CN'));
+        populateSelect(elements.memberFilter, members, '全部成员');
+        populateSelect(elements.modelFilter, models, '全部模型');
+
+        const fileCount = filesForSelection().length;
+        elements.dataRange.textContent = `${minimum} 至 ${maximum} · ${fileCount} 个自然月 · 每日 08:00-21:00 整点更新`;
+      }
+
+      function filteredRows() {
+        const member = elements.memberFilter.value;
+        const model = elements.modelFilter.value;
+
+        return allRows.filter(row => {
+          if (!row.time) return false;
+          if (member && row.member !== member) return false;
+          if (model && row.model !== model) return false;
+          return true;
+        });
+      }
+
+      function filesForSelection() {
+        if (periodMode === 'year') {
+          return catalog.months
+            .filter(item => Number(item.rows) > 0 && String(item.year) === elements.yearFilter.value)
+            .sort((a, b) => a.id.localeCompare(b.id));
+        }
+        const selected = catalog.months.find(item => Number(item.rows) > 0 && item.id === elements.monthFilter.value);
+        return selected ? [selected] : [];
+      }
+
+      function setPeriodMode(mode, reload = true) {
+        periodMode = mode;
+        const yearly = mode === 'year';
+        elements.monthModeButton.setAttribute('aria-pressed', String(!yearly));
+        elements.yearModeButton.setAttribute('aria-pressed', String(yearly));
+        elements.monthField.classList.toggle('hidden', yearly);
+        elements.yearField.classList.toggle('hidden', !yearly);
+        elements.trendTitle.textContent = yearly ? '每月成员花费' : '每日成员花费';
+        if (reload) loadData();
+      }
+
+      function aggregate(rows, keyName) {
+        const map = new Map();
+        rows.forEach(row => {
+          const key = row[keyName];
+          if (!map.has(key)) {
+            map.set(key, {
+              name: key,
+              requests: 0,
+              cost: 0,
+              prompt: 0,
+              completion: 0,
+              latency: 0,
+              models: new Map()
+            });
+          }
+          const item = map.get(key);
+          item.requests += 1;
+          item.cost += row.cost;
+          item.prompt += row.prompt;
+          item.completion += row.completion;
+          item.latency += row.latency;
+          item.models.set(row.model, (item.models.get(row.model) || 0) + row.cost);
+        });
+        return [...map.values()];
+      }
+
+      function renderMetrics(rows) {
+        const totalCost = rows.reduce((sum, row) => sum + row.cost, 0);
+        const prompt = rows.reduce((sum, row) => sum + row.prompt, 0);
+        const completion = rows.reduce((sum, row) => sum + row.completion, 0);
+        const members = new Set(rows.map(row => row.member)).size;
+
+        document.getElementById('totalCost').textContent = formatCost(totalCost);
+        document.getElementById('totalRequests').textContent = formatNumber(rows.length);
+        document.getElementById('totalTokens').textContent = formatCompact(prompt + completion);
+        document.getElementById('activeMembers').textContent = formatNumber(members);
+        document.getElementById('costContext').textContent = `平均 ${rows.length ? formatCost(totalCost / rows.length) : '0'} / 请求`;
+        document.getElementById('requestContext').textContent = rows.length ? `${formatNumber(rows.length / Math.max(members, 1), 1)} 次 / 活跃成员` : '筛选范围内';
+        document.getElementById('tokenContext').textContent = `提示 ${formatCompact(prompt)} · 补全 ${formatCompact(completion)}`;
+        document.getElementById('memberContext').textContent = elements.memberFilter.value ? '当前选中成员' : '有请求的成员';
+      }
+
+      function baseTooltip() {
+        return {
+          trigger: 'item',
+          backgroundColor: '#17221f',
+          borderWidth: 0,
+          textStyle: { color: '#ffffff' }
+        };
+      }
+
+      function frequencyColor(value, maximum) {
+        if (!value || !maximum) return '#edf2f3';
+        const ratio = value / maximum;
+        if (ratio <= 0.25) return '#c7edf3';
+        if (ratio <= 0.5) return '#7bd2df';
+        if (ratio <= 0.75) return '#32b5c9';
+        return MEMBER_BAR_COLOR;
+      }
+
+      function datesForPeriod() {
+        const yearly = periodMode === 'year';
+        const value = yearly ? elements.yearFilter.value : elements.monthFilter.value;
+        const [year, month] = value.split('-').map(Number);
+        const start = yearly ? new Date(year, 0, 1) : new Date(year, month - 1, 1);
+        const end = yearly ? new Date(year, 11, 31) : new Date(year, month, 0);
+        const dates = [];
+
+        for (const date = new Date(start); date <= end; date.setDate(date.getDate() + 1)) {
+          dates.push(dateKey(date));
+        }
+        return { dates, range: value };
+      }
+
+      function renderFrequencyChart(rows) {
+        const { dates, range } = datesForPeriod();
+        const metric = FREQUENCY_METRICS[frequencyMetric];
+        const values = new Map();
+        const requests = new Map();
+        let total = 0;
+        rows.forEach(row => {
+          const value = metric.value(row);
+          values.set(row.day, (values.get(row.day) || 0) + value);
+          requests.set(row.day, (requests.get(row.day) || 0) + 1);
+          total += value;
+        });
+        const maximum = Math.max(0, ...values.values());
+        const activeDays = dates.filter(day => (requests.get(day) || 0) > 0).length;
+        const memberLabel = modelMember || elements.memberFilter.value || '全部成员';
+        const yearly = periodMode === 'year';
+        const periodLabel = yearly ? `${range}年` : monthLabel(range);
+
+        elements.frequencyMeta.textContent = `${periodLabel} · ${memberLabel} · ${formatNumber(activeDays)} 个活跃日 · ${metric.summary(total)}`;
+        elements.frequencyScroll.classList.toggle('is-year', yearly);
+        elements.frequencyScroll.classList.toggle('is-month', !yearly);
+        elements.frequencyChart.classList.toggle('is-year', yearly);
+        elements.frequencyChart.classList.toggle('is-month', !yearly);
+        elements.frequencyChart.setAttribute('aria-label', `${memberLabel}${yearly ? '全年' : '当月'}每日${metric.label}热力图`);
+        charts.frequency.resize();
+        charts.frequency.setOption({
+          animationDurationUpdate: 300,
+          tooltip: {
+            ...baseTooltip(),
+            formatter: params => `${escapeHtml(params.value[0])}<br>${metric.tooltip(params.value[1])}`
+          },
+          calendar: {
+            top: yearly ? 34 : 28,
+            left: yearly ? 48 : 'center',
+            range,
+            cellSize: yearly ? [16, 16] : [24, 24],
+            splitLine: { show: false },
+            itemStyle: {
+              color: '#edf2f3',
+              borderColor: '#ffffff',
+              borderWidth: 3
+            },
+            yearLabel: { show: false },
+            monthLabel: {
+              show: true,
+              nameMap: 'ZH',
+              color: '#66736f',
+              fontSize: 11,
+              margin: yearly ? 7 : 9
+            },
+            dayLabel: {
+              firstDay: 1,
+              nameMap: ['日', '一', '二', '三', '四', '五', '六'],
+              color: '#66736f',
+              fontSize: 11,
+              margin: 9
+            }
+          },
+          series: [{
+            type: 'heatmap',
+            coordinateSystem: 'calendar',
+            data: dates.map(day => {
+              const value = values.get(day) || 0;
+              return {
+                value: [day, value],
+                itemStyle: {
+                  color: frequencyColor(value, maximum),
+                  borderColor: '#ffffff',
+                  borderWidth: 2,
+                  borderRadius: 3
+                }
+              };
+            })
+          }]
+        }, true);
+      }
+
+      function renderMemberCostChart(rows) {
+        const data = aggregate(rows, 'member').sort((a, b) => b.cost - a.cost);
+        charts.memberCost.setOption({
+          animationDurationUpdate: 350,
+          color: [MEMBER_BAR_COLOR],
+          tooltip: {
+            ...baseTooltip(),
+            formatter: params => `${escapeHtml(params.name)}<br>花费：${formatCost(params.value)}<br>请求：${formatNumber(data[params.dataIndex].requests)}`
+          },
+          grid: { top: 10, right: 86, bottom: 35, left: 86, containLabel: true },
+          xAxis: {
+            type: 'value',
+            name: '花费',
+            axisLabel: { formatter: value => formatCompact(value), color: '#66736f' },
+            splitLine: { lineStyle: { color: '#e5ebe8' } }
+          },
+          yAxis: {
+            type: 'category',
+            inverse: true,
+            data: data.map(item => item.name),
+            axisTick: { show: false },
+            axisLine: { show: false },
+            axisLabel: { color: '#17221f', width: 110, overflow: 'truncate' }
+          },
+          series: [{
+            type: 'bar',
+            cursor: 'pointer',
+            data: data.map(item => ({
+              value: item.cost,
+              itemStyle: {
+                color: !modelMember || modelMember === item.name ? MEMBER_BAR_COLOR : '#b8c5c1',
+                opacity: !modelMember || modelMember === item.name ? 1 : 0.55,
+                borderRadius: [0, 3, 3, 0]
+              }
+            })),
+            barMaxWidth: 28,
+            label: {
+              show: true,
+              position: 'right',
+              color: '#17221f',
+              formatter: params => formatCost(params.value)
+            }
+          }]
+        }, true);
+      }
+
+      function renderModelChart(rows) {
+        const data = aggregate(rows, 'model').sort((a, b) => b.cost - a.cost);
+        elements.modelChartTitle.textContent = modelMember ? `${modelMember} · 模型花费构成` : '模型花费构成';
+        elements.modelChartMeta.textContent = modelMember ? '再次点击左侧同一成员恢复全部' : '点击左侧成员柱查看个人构成';
+        charts.model.setOption({
+          animationDurationUpdate: 350,
+          color: MODEL_COLORS,
+          tooltip: {
+            ...baseTooltip(),
+            formatter: params => `${escapeHtml(params.name)}<br>花费：${formatCost(params.value)}<br>占比：${params.percent}%`
+          },
+          legend: {
+            type: 'scroll',
+            orient: 'horizontal',
+            bottom: 0,
+            textStyle: { color: '#66736f' }
+          },
+          series: [{
+            type: 'pie',
+            radius: ['48%', '72%'],
+            center: ['50%', '45%'],
+            avoidLabelOverlap: true,
+            itemStyle: { borderColor: '#ffffff', borderWidth: 2 },
+            label: { formatter: '{b}\n{d}%', color: '#17221f' },
+            data: data.map(item => ({ name: item.name, value: item.cost }))
+          }]
+        }, true);
+      }
+
+      function renderTrendChart(rows) {
+        const bucketFor = row => periodMode === 'year' ? row.day.slice(0, 7) : row.day;
+        const periods = [...new Set(rows.map(bucketFor))].sort();
+        const members = aggregate(rows, 'member').sort((a, b) => b.cost - a.cost).map(item => item.name);
+        const totals = new Map();
+        rows.forEach(row => {
+          const key = `${bucketFor(row)}\u0000${row.member}`;
+          totals.set(key, (totals.get(key) || 0) + row.cost);
+        });
+
+        charts.trend.setOption({
+          animationDurationUpdate: 350,
+          color: COLORS,
+          tooltip: {
+            trigger: 'axis',
+            backgroundColor: '#17221f',
+            borderWidth: 0,
+            textStyle: { color: '#ffffff' },
+            valueFormatter: value => formatCost(value)
+          },
+          legend: {
+            type: 'scroll',
+            top: 0,
+            right: 0,
+            textStyle: { color: '#66736f' }
+          },
+          grid: { top: 48, right: 24, bottom: 42, left: 66 },
+          xAxis: {
+            type: 'category',
+            boundaryGap: false,
+            data: periods,
+            axisLine: { lineStyle: { color: '#cdd7d3' } },
+            axisLabel: { color: '#66736f' }
+          },
+          yAxis: {
+            type: 'value',
+            name: '花费',
+            axisLabel: { formatter: value => formatCompact(value), color: '#66736f' },
+            splitLine: { lineStyle: { color: '#e5ebe8' } }
+          },
+          series: members.map(member => ({
+            name: member,
+            type: 'line',
+            symbol: 'circle',
+            symbolSize: 7,
+            lineStyle: { width: 2 },
+            emphasis: { focus: 'series' },
+            data: periods.map(period => totals.get(`${period}\u0000${member}`) || 0)
+          }))
+        }, true);
+      }
+
+      function renderTable(rows) {
+        const data = aggregate(rows, 'member').sort((a, b) => b.cost - a.cost);
+        elements.tableMeta.textContent = `${formatNumber(data.length)} 位成员 · 按花费降序`;
+        elements.memberTable.innerHTML = data.map(item => {
+          const primaryModel = [...item.models.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || '-';
+          return `<tr>
+            <td><button type="button" class="member-button" data-member="${escapeHtml(item.name)}">${escapeHtml(item.name)}</button></td>
+            <td class="number">${formatNumber(item.requests)}</td>
+            <td class="number">${formatCost(item.cost)}</td>
+            <td class="number">${formatNumber(item.prompt)}</td>
+            <td class="number">${formatNumber(item.completion)}</td>
+            <td class="number">${formatCost(item.requests ? item.cost / item.requests : 0)}</td>
+            <td class="number">${formatNumber(item.requests ? item.latency / item.requests : 0, 2)} ms</td>
+            <td>${escapeHtml(primaryModel)}</td>
+          </tr>`;
+        }).join('');
+        elements.emptyState.hidden = data.length > 0;
+      }
+
+      function render() {
+        const rows = filteredRows();
+        if (modelMember && !rows.some(row => row.member === modelMember)) modelMember = '';
+        const focusedRows = modelMember ? rows.filter(row => row.member === modelMember) : rows;
+        renderMetrics(rows);
+        renderFrequencyChart(focusedRows);
+        renderMemberCostChart(rows);
+        renderModelChart(focusedRows);
+        renderTrendChart(rows);
+        renderTable(rows);
+      }
+
+      async function loadData() {
+        setStatus('loading', '正在刷新');
+        clearError();
+
+        try {
+          if (!window.Papa || !window.echarts) {
+            throw new Error('图表依赖未加载，请检查 vendor 目录中的 JS 文件');
+          }
+
+          const catalogResponse = await fetch(`${CATALOG_URL}?t=${Date.now()}`, { cache: 'no-store' });
+          if (!catalogResponse.ok) throw new Error(`月份目录请求失败，HTTP ${catalogResponse.status}`);
+          catalog = await catalogResponse.json();
+          if (!Array.isArray(catalog.months) || !catalog.months.length) {
+            throw new Error('月份目录中没有可用数据');
+          }
+
+          initializePeriodSelectors();
+          const files = filesForSelection();
+          if (!files.length) throw new Error('所选周期没有归档数据');
+
+          const batches = await Promise.all(files.map(async file => {
+            const response = await fetch(`data/${file.file}?t=${Date.now()}`, { cache: 'no-store' });
+            if (!response.ok) throw new Error(`${file.id} 数据请求失败，HTTP ${response.status}`);
+            const text = (await response.text()).replace(/^\uFEFF/, '');
+            const parsed = Papa.parse(text, { header: true, skipEmptyLines: 'greedy' });
+
+            if (parsed.errors.length && !parsed.data.length) {
+              throw new Error(`${file.id} CSV 解析失败：${parsed.errors[0].message}`);
+            }
+
+            const fields = parsed.meta.fields || [];
+            const missing = Object.values(FIELD).filter(field => !fields.includes(field));
+            if (missing.length) throw new Error(`${file.id} CSV 缺少字段：${missing.join('、')}`);
+            return parsed.data
+              .filter(row => String(row[FIELD.type] ?? '').trim().toLowerCase() === 'consume')
+              .map(normalizeRow)
+              .filter(row => row.time);
+          }));
+
+          allRows = batches.flat();
+          initializeDimensionFilters();
+          render();
+          const periodLabel = periodMode === 'year'
+            ? `${elements.yearFilter.value}年`
+            : monthLabel(elements.monthFilter.value);
+          setStatus('ok', `${periodLabel} · 数据更新于 ${formatUpdatedAt(catalog.updatedAt)}`);
+        } catch (error) {
+          console.error(error);
+          setStatus('error', '更新失败');
+          showError(error.message || '数据加载失败');
+        }
+      }
+
+      function initializeApp() {
+        if (!window.Papa || !window.echarts) {
+          setStatus('error', '依赖加载失败');
+          showError('无法加载图表依赖，请确认 vendor/echarts.min.js 和 vendor/papaparse.min.js 存在。');
+          return;
+        }
+
+        charts.memberCost = echarts.init(document.getElementById('memberCostChart'));
+        charts.model = echarts.init(document.getElementById('modelChart'));
+        charts.trend = echarts.init(document.getElementById('trendChart'));
+        charts.frequency = echarts.init(document.getElementById('frequencyChart'));
+
+        elements.frequencyMetricButtons.forEach(button => {
+          button.addEventListener('click', () => {
+            const metric = button.dataset.frequencyMetric;
+            if (!FREQUENCY_METRICS[metric] || metric === frequencyMetric) return;
+            frequencyMetric = metric;
+            elements.frequencyMetricButtons.forEach(item => {
+              item.setAttribute('aria-pressed', String(item.dataset.frequencyMetric === frequencyMetric));
+            });
+            render();
+          });
+        });
+
+        [elements.memberFilter, elements.modelFilter]
+          .forEach(control => control.addEventListener('change', () => {
+            if (control === elements.memberFilter) modelMember = '';
+            render();
+          }));
+
+        charts.memberCost.on('click', params => {
+          if (params.componentType !== 'series' || params.seriesType !== 'bar') return;
+          modelMember = modelMember === params.name ? '' : params.name;
+          render();
+        });
+
+        elements.monthModeButton.addEventListener('click', () => {
+          if (periodMode !== 'month') {
+            modelMember = '';
+            setPeriodMode('month');
+          }
+        });
+        elements.yearModeButton.addEventListener('click', () => {
+          if (periodMode !== 'year') {
+            modelMember = '';
+            setPeriodMode('year');
+          }
+        });
+        elements.monthFilter.addEventListener('change', () => {
+          modelMember = '';
+          loadData();
+        });
+        elements.yearFilter.addEventListener('change', () => {
+          modelMember = '';
+          loadData();
+        });
+
+        elements.memberTable.addEventListener('click', event => {
+          const button = event.target.closest('[data-member]');
+          if (!button) return;
+          elements.memberFilter.value = button.dataset.member;
+          render();
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        });
+
+        let resizeTimer;
+        window.addEventListener('resize', () => {
+          clearTimeout(resizeTimer);
+          resizeTimer = setTimeout(() => Object.values(charts).forEach(chart => chart.resize()), 120);
+        });
+
+        setPeriodMode('month', false);
+        loadData();
+        setInterval(loadData, REFRESH_INTERVAL_MS);
+      }
+
+      initializeApp();
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,33 @@
+# Dashboard data and exports
+*.csv
+data/
+raw/
+logs/
+*.log
+
+# Credentials and local configuration
+access_token
+user_id
+export_url
+.htpasswd
+.env
+.env.*
+*.key
+*.pem
+id_rsa*
+id_ed25519*
+
+# Runtime state
+state/
+*.finalized
+*.uploading
+*.lock
+.last-download.sha256
+
+# Python and editor files
+__pycache__/
+*.py[cod]
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
