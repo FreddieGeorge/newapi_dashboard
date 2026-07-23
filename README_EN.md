@@ -85,10 +85,8 @@ The updater can run as your existing non-root Linux user. A dedicated user is op
 
 ## 1. Clone the repository
 
-Replace the URL with your repository URL:
-
 ```bash
-git clone https://github.com/YOUR_NAME/newapi-dashboard.git ~/newapi-dashboard
+git clone https://github.com/FreddieGeorge/newapi_dashboard.git ~/newapi-dashboard
 cd ~/newapi-dashboard
 ```
 
