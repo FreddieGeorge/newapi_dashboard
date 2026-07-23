@@ -13,6 +13,24 @@ Features:
 - Daily heatmap switchable between requests, cost, and tokens
 - Member usage trends and a detailed records table
 
+## Screenshots
+
+All screenshots below use fully synthetic demo data. They contain no real members, organizations, or request records.
+
+### Monthly overview
+
+![Monthly overview](docs/screenshots/month-overview.png)
+
+### Member model breakdown
+
+Selecting an anonymous member's cost bar updates both the model breakdown and heatmap for that member.
+
+![Member model breakdown](docs/screenshots/member-model-breakdown.png)
+
+### Annual usage heatmap
+
+![Annual usage heatmap](docs/screenshots/year-heatmap.png)
+
 ## Architecture
 
 ```text
@@ -280,4 +298,3 @@ Common failures:
 ## Third-party components
 
 The frontend includes Apache ECharts 5.5.1 and Papa Parse 5.4.1. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
-

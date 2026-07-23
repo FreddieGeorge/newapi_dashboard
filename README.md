@@ -13,6 +13,24 @@
 - 按请求次数、花费或 Token 切换的每日热力图
 - 成员使用趋势和明细表
 
+## 界面预览
+
+以下截图使用完全合成的演示数据，不包含真实成员、组织或请求记录。
+
+### 月度使用总览
+
+![月度使用总览](docs/screenshots/month-overview.png)
+
+### 成员模型构成
+
+点击匿名成员的花费柱后，模型构成与热力图会切换到该成员。
+
+![成员模型构成](docs/screenshots/member-model-breakdown.png)
+
+### 年度使用热力图
+
+![年度使用热力图](docs/screenshots/year-heatmap.png)
+
 ## 架构
 
 ```text
