@@ -87,10 +87,9 @@ sudo apt install -y nginx python3 cron util-linux apache2-utils
 
 ## 1. 下载项目
 
-将地址替换为自己的 GitHub 仓库：
 
 ```bash
-git clone https://github.com/YOUR_NAME/newapi-dashboard.git ~/newapi-dashboard
+git clone https://github.com/FreddieGeorge/newapi_dashboard.git ~/newapi-dashboard
 cd ~/newapi-dashboard
 ```
 
