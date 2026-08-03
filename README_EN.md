@@ -9,6 +9,7 @@ Features:
 - Calendar month and calendar year views
 - Member and model filters
 - Cost, request, token, and active-member metrics
+- Weekly cost totals for calendar-month views and monthly cost totals for calendar-year views
 - Member cost ranking and model cost breakdown
 - Daily heatmap switchable between requests, cost, and tokens
 - Member usage trends and a detailed records table
@@ -19,17 +20,19 @@ All screenshots below use fully synthetic demo data. They contain no real member
 
 ### Monthly overview
 
-![Monthly overview](docs/screenshots/month-overview.png)
+Calendar weeks run from Monday through Sunday, so the first and last week can include dates from adjacent months.
+
+![Monthly overview](docs/screenshots/month-overview.jpg)
 
 ### Member model breakdown
 
-Selecting an anonymous member's cost bar updates both the model breakdown and heatmap for that member.
+Selecting an anonymous member's cost bar updates the period summary, model breakdown, and heatmap for that member.
 
-![Member model breakdown](docs/screenshots/member-model-breakdown.png)
+![Member model breakdown](docs/screenshots/member-model-breakdown.jpg)
 
-### Annual usage heatmap
+### Annual monthly cost totals
 
-![Annual usage heatmap](docs/screenshots/year-heatmap.png)
+![Annual monthly cost totals](docs/screenshots/year-heatmap.jpg)
 
 ## Architecture
 

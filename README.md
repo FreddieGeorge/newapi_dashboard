@@ -9,6 +9,7 @@
 - 自然月、自然年切换
 - 成员和模型筛选
 - 花费、请求数、Token 和活跃成员统计
+- 自然月按完整自然周汇总花费，自然年按有数据月份汇总花费
 - 成员花费排行与模型花费构成
 - 按请求次数、花费或 Token 切换的每日热力图
 - 成员使用趋势和明细表
@@ -19,17 +20,19 @@
 
 ### 月度使用总览
 
-![月度使用总览](docs/screenshots/month-overview.png)
+自然周按周一至周日统计，首尾周可能包含相邻月份数据。
+
+![月度使用总览](docs/screenshots/month-overview.jpg)
 
 ### 成员模型构成
 
-点击匿名成员的花费柱后，模型构成与热力图会切换到该成员。
+点击匿名成员的花费柱后，周期汇总、模型构成与热力图会切换到该成员。
 
-![成员模型构成](docs/screenshots/member-model-breakdown.png)
+![成员模型构成](docs/screenshots/member-model-breakdown.jpg)
 
-### 年度使用热力图
+### 年度每月花费汇总
 
-![年度使用热力图](docs/screenshots/year-heatmap.png)
+![年度每月花费汇总](docs/screenshots/year-heatmap.jpg)
 
 ## 架构
 

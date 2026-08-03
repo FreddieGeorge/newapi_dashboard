@@ -219,6 +219,26 @@
       margin-bottom: 30px;
     }
 
+    .period-summary-section { margin-bottom: 30px; }
+
+    .period-summary-note {
+      margin: -2px 0 8px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .period-summary-scroll {
+      width: 100%;
+      overflow-x: auto;
+      overflow-y: hidden;
+    }
+
+    .period-summary-chart {
+      width: 100%;
+      min-width: 100%;
+      height: 280px;
+    }
+
     .frequency-section { margin-bottom: 30px; }
 
     .frequency-header-actions {
@@ -452,6 +472,17 @@
       </article>
     </section>
 
+    <section class="section period-summary-section">
+      <div class="section-header">
+        <h2 id="periodSummaryTitle">自然周花费</h2>
+        <p class="section-meta" id="periodSummaryMeta">全部成员 · 全部模型</p>
+      </div>
+      <p class="period-summary-note" id="periodSummaryNote">按周一至周日统计，首尾周可能包含相邻月份数据。</p>
+      <div class="period-summary-scroll">
+        <div class="period-summary-chart" id="periodSummaryChart" role="img" aria-label="自然周花费汇总图"></div>
+      </div>
+    </section>
+
     <div class="chart-grid">
       <section class="section">
         <div class="section-header">
@@ -590,6 +621,10 @@
         trendTitle: document.getElementById('trendTitle'),
         modelChartTitle: document.getElementById('modelChartTitle'),
         modelChartMeta: document.getElementById('modelChartMeta'),
+        periodSummaryTitle: document.getElementById('periodSummaryTitle'),
+        periodSummaryMeta: document.getElementById('periodSummaryMeta'),
+        periodSummaryNote: document.getElementById('periodSummaryNote'),
+        periodSummaryChart: document.getElementById('periodSummaryChart'),
         frequencyMetricButtons: [...document.querySelectorAll('[data-frequency-metric]')],
         frequencyMeta: document.getElementById('frequencyMeta'),
         frequencyScroll: document.getElementById('frequencyScroll'),
@@ -597,6 +632,8 @@
       };
 
       let allRows = [];
+      let weeklyRows = [];
+      let weeklyMissingMonths = [];
       let charts = {};
       let catalog = { months: [] };
       let periodMode = 'month';
@@ -619,6 +656,29 @@
         const month = String(date.getMonth() + 1).padStart(2, '0');
         const day = String(date.getDate()).padStart(2, '0');
         return `${year}-${month}-${day}`;
+      }
+
+      function dateFromKey(value) {
+        const [year, month, day] = value.split('-').map(Number);
+        return new Date(year, month - 1, day);
+      }
+
+      function addDays(date, amount) {
+        const result = new Date(date);
+        result.setDate(result.getDate() + amount);
+        return result;
+      }
+
+      function calendarWeekStart(date) {
+        return addDays(date, -((date.getDay() + 6) % 7));
+      }
+
+      function calendarWeekEnd(date) {
+        return addDays(calendarWeekStart(date), 6);
+      }
+
+      function monthIdForDate(date) {
+        return dateKey(date).slice(0, 7);
       }
 
       function formatNumber(value, maximumFractionDigits = 0) {
@@ -748,15 +808,45 @@
       }
 
       function filteredRows() {
+        return applyDimensionFilters(allRows);
+      }
+
+      function applyDimensionFilters(rows) {
         const member = elements.memberFilter.value;
         const model = elements.modelFilter.value;
 
-        return allRows.filter(row => {
+        return rows.filter(row => {
           if (!row.time) return false;
           if (member && row.member !== member) return false;
           if (model && row.model !== model) return false;
           return true;
         });
+      }
+
+      function monthWeekRange() {
+        const [year, month] = elements.monthFilter.value.split('-').map(Number);
+        const monthStart = new Date(year, month - 1, 1);
+        const monthEnd = new Date(year, month, 0);
+        return {
+          start: calendarWeekStart(monthStart),
+          end: calendarWeekEnd(monthEnd)
+        };
+      }
+
+      function filesForWeeklySummary() {
+        const range = monthWeekRange();
+        const requiredIds = [...new Set([
+          monthIdForDate(range.start),
+          elements.monthFilter.value,
+          monthIdForDate(range.end)
+        ])];
+        const files = requiredIds
+          .map(id => catalog.months.find(item => item.id === id))
+          .filter(Boolean);
+        return {
+          files,
+          missingMonths: requiredIds.filter(id => !files.some(file => file.id === id))
+        };
       }
 
       function filesForSelection() {
@@ -829,6 +919,126 @@
           borderWidth: 0,
           textStyle: { color: '#ffffff' }
         };
+      }
+
+      function periodSummaryData(rows) {
+        const yearly = periodMode === 'year';
+        const totals = new Map();
+        let relevantRows = rows;
+        let activeWeekKeys = null;
+
+        if (!yearly) {
+          const range = monthWeekRange();
+          const startKey = dateKey(range.start);
+          const endKey = dateKey(range.end);
+          relevantRows = rows.filter(row => row.day >= startKey && row.day <= endKey);
+          activeWeekKeys = new Set(relevantRows
+            .filter(row => row.day.slice(0, 7) === elements.monthFilter.value)
+            .map(row => dateKey(calendarWeekStart(dateFromKey(row.day)))));
+        }
+
+        relevantRows.forEach(row => {
+          const key = yearly ? row.day.slice(0, 7) : dateKey(calendarWeekStart(dateFromKey(row.day)));
+          if (activeWeekKeys && !activeWeekKeys.has(key)) return;
+          if (!totals.has(key)) {
+            totals.set(key, { key, cost: 0, requests: 0, members: new Set() });
+          }
+          const item = totals.get(key);
+          item.cost += row.cost;
+          item.requests += 1;
+          item.members.add(row.member);
+        });
+
+        return [...totals.values()]
+          .sort((a, b) => a.key.localeCompare(b.key))
+          .map(item => {
+            if (yearly) {
+              const catalogMonth = catalog.months.find(month => month.id === item.key);
+              return {
+                ...item,
+                label: `${Number(item.key.slice(5))}月`,
+                rangeLabel: monthLabel(item.key),
+                complete: catalogMonth?.complete !== false
+              };
+            }
+            const start = dateFromKey(item.key);
+            const end = addDays(start, 6);
+            return {
+              ...item,
+              label: `${start.getMonth() + 1}/${start.getDate()}-${end.getMonth() + 1}/${end.getDate()}`,
+              rangeLabel: `${start.getFullYear()}年${start.getMonth() + 1}月${start.getDate()}日-${end.getMonth() + 1}月${end.getDate()}日`,
+              complete: true
+            };
+          });
+      }
+
+      function renderPeriodSummaryChart(rows) {
+        const yearly = periodMode === 'year';
+        const data = periodSummaryData(rows);
+        const memberLabel = modelMember || elements.memberFilter.value || '全部成员';
+        const modelLabel = elements.modelFilter.value || '全部模型';
+        const periodLabel = yearly ? `${elements.yearFilter.value}年` : monthLabel(elements.monthFilter.value);
+        const hasIncompleteBoundary = !yearly && data.some(item => {
+          const start = dateFromKey(item.key);
+          const end = addDays(start, 6);
+          return weeklyMissingMonths.includes(monthIdForDate(start))
+            || weeklyMissingMonths.includes(monthIdForDate(end));
+        });
+
+        elements.periodSummaryTitle.textContent = yearly ? `${periodLabel}每月总花费` : `${periodLabel}自然周花费`;
+        elements.periodSummaryMeta.textContent = `${memberLabel} · ${modelLabel}`;
+        elements.periodSummaryNote.hidden = yearly;
+        elements.periodSummaryNote.textContent = hasIncompleteBoundary
+          ? '按周一至周日统计，首尾周可能包含相邻月份数据；未归档月份按已有数据统计。'
+          : '按周一至周日统计，首尾周可能包含相邻月份数据。';
+        elements.periodSummaryChart.style.minWidth = `${data.length * (yearly ? 88 : 130)}px`;
+        elements.periodSummaryChart.setAttribute('aria-label', `${memberLabel}${yearly ? '每月' : '自然周'}花费汇总图`);
+        charts.periodSummary.resize();
+        charts.periodSummary.setOption({
+          animationDurationUpdate: 350,
+          color: [MEMBER_BAR_COLOR],
+          tooltip: {
+            ...baseTooltip(),
+            formatter: params => {
+              const item = data[params.dataIndex];
+              const status = yearly && !item.complete ? '<br>状态：数据更新中' : '';
+              return `${escapeHtml(item.rangeLabel)}<br>花费：${formatCost(item.cost)}<br>请求：${formatNumber(item.requests)}<br>活跃成员：${formatNumber(item.members.size)}${status}`;
+            }
+          },
+          grid: { top: 38, right: 28, bottom: 42, left: 66 },
+          xAxis: {
+            type: 'category',
+            data: data.map(item => item.label),
+            axisTick: { alignWithLabel: true },
+            axisLine: { lineStyle: { color: '#cdd7d3' } },
+            axisLabel: { color: '#66736f', interval: 0 }
+          },
+          yAxis: {
+            type: 'value',
+            name: '花费',
+            axisLabel: { formatter: value => formatCompact(value), color: '#66736f' },
+            splitLine: { lineStyle: { color: '#e5ebe8' } }
+          },
+          series: [{
+            name: '花费',
+            type: 'bar',
+            barMaxWidth: 56,
+            data: data.map(item => ({
+              value: item.cost,
+              itemStyle: {
+                color: MEMBER_BAR_COLOR,
+                opacity: item.complete ? 1 : 0.55,
+                borderRadius: [3, 3, 0, 0]
+              }
+            })),
+            label: {
+              show: true,
+              position: 'top',
+              color: '#17221f',
+              formatter: params => formatCost(params.value)
+            }
+          }]
+        }, true);
       }
 
       function frequencyColor(value, maximum) {
@@ -1081,7 +1291,12 @@
         const rows = filteredRows();
         if (modelMember && !rows.some(row => row.member === modelMember)) modelMember = '';
         const focusedRows = modelMember ? rows.filter(row => row.member === modelMember) : rows;
+        const summaryBaseRows = applyDimensionFilters(periodMode === 'month' ? weeklyRows : allRows);
+        const summaryFocusedRows = modelMember
+          ? summaryBaseRows.filter(row => row.member === modelMember)
+          : summaryBaseRows;
         renderMetrics(rows);
+        renderPeriodSummaryChart(summaryFocusedRows);
         renderFrequencyChart(focusedRows);
         renderMemberCostChart(rows);
         renderModelChart(focusedRows);
@@ -1108,8 +1323,14 @@
           initializePeriodSelectors();
           const files = filesForSelection();
           if (!files.length) throw new Error('所选周期没有归档数据');
+          const weeklySelection = periodMode === 'month'
+            ? filesForWeeklySummary()
+            : { files, missingMonths: [] };
+          const requestedFiles = [...new Map(
+            [...files, ...weeklySelection.files].map(file => [file.id, file])
+          ).values()];
 
-          const batches = await Promise.all(files.map(async file => {
+          const batches = await Promise.all(requestedFiles.map(async file => {
             const response = await fetch(`data/${file.file}?t=${Date.now()}`, { cache: 'no-store' });
             if (!response.ok) throw new Error(`${file.id} 数据请求失败，HTTP ${response.status}`);
             const text = (await response.text()).replace(/^\uFEFF/, '');
@@ -1122,13 +1343,17 @@
             const fields = parsed.meta.fields || [];
             const missing = Object.values(FIELD).filter(field => !fields.includes(field));
             if (missing.length) throw new Error(`${file.id} CSV 缺少字段：${missing.join('、')}`);
-            return parsed.data
+            const rows = parsed.data
               .filter(row => String(row[FIELD.type] ?? '').trim().toLowerCase() === 'consume')
               .map(normalizeRow)
               .filter(row => row.time);
+            return [file.id, rows];
           }));
 
-          allRows = batches.flat();
+          const rowsByMonth = new Map(batches);
+          allRows = files.flatMap(file => rowsByMonth.get(file.id) || []);
+          weeklyRows = weeklySelection.files.flatMap(file => rowsByMonth.get(file.id) || []);
+          weeklyMissingMonths = weeklySelection.missingMonths;
           initializeDimensionFilters();
           render();
           const periodLabel = periodMode === 'year'
@@ -1151,6 +1376,7 @@
 
         charts.memberCost = echarts.init(document.getElementById('memberCostChart'));
         charts.model = echarts.init(document.getElementById('modelChart'));
+        charts.periodSummary = echarts.init(document.getElementById('periodSummaryChart'));
         charts.trend = echarts.init(document.getElementById('trendChart'));
         charts.frequency = echarts.init(document.getElementById('frequencyChart'));
 
