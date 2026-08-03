@@ -32,7 +32,13 @@
 
 ### 年度每月花费汇总
 
-![年度每月花费汇总](docs/screenshots/year-heatmap.jpg)
+![年度每月花费汇总](docs/screenshots/year-monthly-totals.jpg)
+
+### 年度使用热力图
+
+热力图按自然日展示全年使用频率，可在请求次数、花费和 Token 之间切换；没有数据的日期以浅色显示。
+
+![年度使用热力图](docs/screenshots/year-heatmap.jpg)
 
 ## 架构
 

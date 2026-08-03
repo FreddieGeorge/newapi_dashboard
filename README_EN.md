@@ -32,7 +32,13 @@ Selecting an anonymous member's cost bar updates the period summary, model break
 
 ### Annual monthly cost totals
 
-![Annual monthly cost totals](docs/screenshots/year-heatmap.jpg)
+![Annual monthly cost totals](docs/screenshots/year-monthly-totals.jpg)
+
+### Annual usage heatmap
+
+The heatmap shows daily usage across the year and can switch between requests, cost, and tokens. Dates without data remain lightly shaded.
+
+![Annual usage heatmap](docs/screenshots/year-heatmap.jpg)
 
 ## Architecture
 
