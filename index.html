@@ -44,6 +44,8 @@
       --chart-divider: #ffffff;
       --member-inactive: #b8c5c1;
       --member-bar: #009fb9;
+      --rank-scroll-track: rgba(23, 34, 31, 0.08);
+      --rank-scroll-thumb: #8b8f8d;
       --heat-empty: #edf2f3;
       --heat-low: #c7edf3;
       --heat-mid: #7bd2df;
@@ -81,6 +83,8 @@
       --chart-divider: #171d1b;
       --member-inactive: #596863;
       --member-bar: #20b8ce;
+      --rank-scroll-track: rgba(255, 255, 255, 0.08);
+      --rank-scroll-thumb: #969a98;
       --heat-empty: #28312e;
       --heat-low: #244a50;
       --heat-mid: #176e7b;
@@ -329,6 +333,41 @@
       height: 350px;
     }
 
+    .member-rank-chart {
+      position: relative;
+      height: 350px;
+    }
+
+    .member-rank-chart .chart { height: 100%; }
+
+    .member-rank-scrollbar {
+      position: absolute;
+      z-index: 2;
+      top: 10px;
+      right: 8px;
+      bottom: 35px;
+      width: 10px;
+      padding: 2px;
+      border-radius: 999px;
+      background: var(--rank-scroll-track);
+      cursor: default;
+      touch-action: none;
+    }
+
+    .member-rank-scrollbar:active { cursor: default; }
+
+    .member-rank-scrollbar-thumb {
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 6px;
+      min-height: 32px;
+      border-radius: 999px;
+      background: var(--rank-scroll-thumb);
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+      transition: background-color 160ms ease;
+    }
+
     .chart-wide {
       height: 330px;
       margin-bottom: 30px;
@@ -526,7 +565,7 @@
       .status { display: none; }
       .filters, .metrics { grid-template-columns: 1fr; }
       .metric-value { font-size: 22px; }
-      .chart { height: 320px; }
+      .chart, .member-rank-chart { height: 320px; }
       .section-header { align-items: flex-start; flex-direction: column; }
       .frequency-header-actions { width: 100%; align-items: flex-start; flex-direction: column; }
       .frequency-metric-switch { width: min(100%, 300px); }
@@ -621,7 +660,12 @@
           <h2>成员花费排行</h2>
           <p class="section-meta">按筛选范围汇总</p>
         </div>
-        <div class="chart" id="memberCostChart" role="img" aria-label="成员花费排行图"></div>
+        <div class="member-rank-chart">
+          <div class="chart" id="memberCostChart" role="img" aria-label="成员花费排行图"></div>
+          <div class="member-rank-scrollbar" id="memberRankScrollbar" hidden aria-hidden="true">
+            <span class="member-rank-scrollbar-thumb" id="memberRankScrollbarThumb"></span>
+          </div>
+        </div>
       </section>
 
       <section class="section">
@@ -744,6 +788,8 @@
         yearFilter: document.getElementById('yearFilter'),
         memberFilter: document.getElementById('memberFilter'),
         modelFilter: document.getElementById('modelFilter'),
+        memberRankScrollbar: document.getElementById('memberRankScrollbar'),
+        memberRankScrollbarThumb: document.getElementById('memberRankScrollbarThumb'),
         statusDot: document.getElementById('statusDot'),
         statusText: document.getElementById('statusText'),
         dataRange: document.getElementById('dataRange'),
@@ -772,6 +818,16 @@
       let periodMode = 'month';
       let modelMember = '';
       let frequencyMetric = 'requests';
+      const MEMBER_RANK_VISIBLE_COUNT = 8;
+      const MEMBER_RANK_WHEEL_THRESHOLD = 48;
+      const MEMBER_RANK_GESTURE_IDLE_MS = 180;
+      let memberRankTotal = 0;
+      let memberRankStart = 0;
+      let memberRankKey = '';
+      let memberRankWheelTotal = 0;
+      let memberRankWheelDirection = 0;
+      let memberRankGestureOwner = '';
+      let memberRankGestureTimer = 0;
       let themeMode = THEME_MODES.has(document.documentElement.dataset.themeMode)
         ? document.documentElement.dataset.themeMode
         : 'system';
@@ -791,6 +847,8 @@
           divider: cssColor('--chart-divider'),
           memberInactive: cssColor('--member-inactive'),
           memberBar: cssColor('--member-bar'),
+          rankScrollTrack: cssColor('--rank-scroll-track'),
+          rankScrollThumb: cssColor('--rank-scroll-thumb'),
           heatEmpty: cssColor('--heat-empty'),
           heatLow: cssColor('--heat-low'),
           heatMid: cssColor('--heat-mid'),
@@ -1327,6 +1385,12 @@
       function renderMemberCostChart(rows) {
         const data = aggregate(rows, 'member').sort((a, b) => b.cost - a.cost);
         const theme = chartTheme();
+        const nextMemberRankKey = data.map(item => item.name).join('\u0000');
+        if (nextMemberRankKey !== memberRankKey) memberRankStart = 0;
+        memberRankKey = nextMemberRankKey;
+        memberRankTotal = data.length;
+        const scrollable = data.length > MEMBER_RANK_VISIBLE_COUNT;
+        memberRankStart = Math.min(memberRankStart, Math.max(0, data.length - MEMBER_RANK_VISIBLE_COUNT));
         charts.memberCost.setOption({
           animationDurationUpdate: 350,
           color: [theme.memberBar],
@@ -1335,7 +1399,17 @@
             ...baseTooltip(),
             formatter: params => `${escapeHtml(params.name)}<br>花费：${formatCost(params.value)}<br>请求：${formatNumber(data[params.dataIndex].requests)}`
           },
-          grid: { top: 10, right: 86, bottom: 35, left: 86, containLabel: true },
+          grid: { top: 10, right: scrollable ? 104 : 86, bottom: 35, left: 86, containLabel: true },
+          dataZoom: scrollable ? [{
+            type: 'inside',
+            yAxisIndex: 0,
+            startValue: memberRankStart,
+            endValue: memberRankStart + MEMBER_RANK_VISIBLE_COUNT - 1,
+            zoomLock: true,
+            zoomOnMouseWheel: false,
+            moveOnMouseWheel: false,
+            moveOnMouseMove: false
+          }] : [],
           xAxis: {
             type: 'value',
             name: '花费',
@@ -1370,6 +1444,34 @@
             }
           }]
         }, true);
+        requestAnimationFrame(updateMemberRankScrollbar);
+      }
+
+      function updateMemberRankScrollbar() {
+        const scrollable = memberRankTotal > MEMBER_RANK_VISIBLE_COUNT;
+        elements.memberRankScrollbar.hidden = !scrollable;
+        if (!scrollable) return;
+
+        const trackHeight = elements.memberRankScrollbar.clientHeight - 4;
+        const thumbHeight = Math.max(32, trackHeight * MEMBER_RANK_VISIBLE_COUNT / memberRankTotal);
+        const maxStart = memberRankTotal - MEMBER_RANK_VISIBLE_COUNT;
+        const thumbTop = 2 + (trackHeight - thumbHeight) * memberRankStart / maxStart;
+        elements.memberRankScrollbarThumb.style.height = `${thumbHeight}px`;
+        elements.memberRankScrollbarThumb.style.top = `${thumbTop}px`;
+      }
+
+      function setMemberRankStart(nextStart) {
+        const maxStart = Math.max(0, memberRankTotal - MEMBER_RANK_VISIBLE_COUNT);
+        const normalizedStart = Math.max(0, Math.min(maxStart, Math.round(nextStart)));
+        if (normalizedStart === memberRankStart) return;
+        memberRankStart = normalizedStart;
+        charts.memberCost.dispatchAction({
+          type: 'dataZoom',
+          dataZoomIndex: 0,
+          startValue: memberRankStart,
+          endValue: memberRankStart + MEMBER_RANK_VISIBLE_COUNT - 1
+        });
+        updateMemberRankScrollbar();
       }
 
       function renderModelChart(rows) {
@@ -1606,6 +1708,87 @@
           render();
         });
 
+        const memberCostElement = document.getElementById('memberCostChart');
+        memberCostElement.addEventListener('wheel', event => {
+          if (memberRankTotal <= MEMBER_RANK_VISIBLE_COUNT || !event.deltaY) return;
+          const direction = event.deltaY > 0 ? 1 : -1;
+          const maxStart = memberRankTotal - MEMBER_RANK_VISIBLE_COUNT;
+          const atBoundary = direction > 0
+            ? memberRankStart >= maxStart
+            : memberRankStart <= 0;
+
+          if (!memberRankGestureOwner) {
+            memberRankGestureOwner = atBoundary ? 'page' : 'ranking';
+          }
+
+          window.clearTimeout(memberRankGestureTimer);
+          memberRankGestureTimer = window.setTimeout(() => {
+            memberRankGestureOwner = '';
+            memberRankWheelTotal = 0;
+            memberRankWheelDirection = 0;
+          }, MEMBER_RANK_GESTURE_IDLE_MS);
+
+          if (memberRankGestureOwner === 'page') return;
+
+          event.preventDefault();
+          event.stopPropagation();
+          if (direction !== memberRankWheelDirection) {
+            memberRankWheelTotal = 0;
+            memberRankWheelDirection = direction;
+          }
+
+          const deltaScale = event.deltaMode === 1
+            ? 16
+            : event.deltaMode === 2
+              ? memberCostElement.clientHeight
+              : 1;
+          memberRankWheelTotal += event.deltaY * deltaScale;
+          if (Math.abs(memberRankWheelTotal) < MEMBER_RANK_WHEEL_THRESHOLD || atBoundary) return;
+
+          memberRankWheelTotal = 0;
+          setMemberRankStart(memberRankStart + direction);
+        }, { passive: false });
+
+        charts.memberCost.on('datazoom', () => {
+          const startValue = Number(charts.memberCost.getOption().dataZoom?.[0]?.startValue);
+          if (Number.isFinite(startValue)) {
+            memberRankStart = startValue;
+            updateMemberRankScrollbar();
+          }
+        });
+
+        let memberRankDragPointer = null;
+        let memberRankDragOffset = 0;
+        const moveMemberRankThumb = event => {
+          const track = elements.memberRankScrollbar;
+          const thumb = elements.memberRankScrollbarThumb;
+          const rect = track.getBoundingClientRect();
+          const available = track.clientHeight - 4 - thumb.offsetHeight;
+          const y = Math.max(0, Math.min(available, event.clientY - rect.top - 2 - memberRankDragOffset));
+          const maxStart = memberRankTotal - MEMBER_RANK_VISIBLE_COUNT;
+          setMemberRankStart(available ? y / available * maxStart : 0);
+        };
+        elements.memberRankScrollbar.addEventListener('pointerdown', event => {
+          if (elements.memberRankScrollbar.hidden) return;
+          memberRankDragPointer = event.pointerId;
+          memberRankDragOffset = event.target === elements.memberRankScrollbarThumb
+            ? event.clientY - elements.memberRankScrollbarThumb.getBoundingClientRect().top
+            : elements.memberRankScrollbarThumb.offsetHeight / 2;
+          elements.memberRankScrollbar.setPointerCapture(event.pointerId);
+          moveMemberRankThumb(event);
+          event.preventDefault();
+        });
+        elements.memberRankScrollbar.addEventListener('pointermove', event => {
+          if (event.pointerId !== memberRankDragPointer) return;
+          moveMemberRankThumb(event);
+        });
+        const endMemberRankDrag = event => {
+          if (event.pointerId !== memberRankDragPointer) return;
+          memberRankDragPointer = null;
+        };
+        elements.memberRankScrollbar.addEventListener('pointerup', endMemberRankDrag);
+        elements.memberRankScrollbar.addEventListener('pointercancel', endMemberRankDrag);
+
         elements.monthModeButton.addEventListener('click', () => {
           if (periodMode !== 'month') {
             modelMember = '';
@@ -1638,7 +1821,10 @@
         let resizeTimer;
         window.addEventListener('resize', () => {
           clearTimeout(resizeTimer);
-          resizeTimer = setTimeout(() => Object.values(charts).forEach(chart => chart.resize()), 120);
+          resizeTimer = setTimeout(() => {
+            Object.values(charts).forEach(chart => chart.resize());
+            updateMemberRankScrollbar();
+          }, 120);
         });
 
         setPeriodMode('month', false);
