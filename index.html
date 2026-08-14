@@ -1152,9 +1152,12 @@
         const theme = chartTheme();
         return {
           trigger: 'item',
+          appendToBody: true,
+          confine: false,
           backgroundColor: theme.tooltipBackground,
           borderWidth: 0,
-          textStyle: { color: theme.tooltipText }
+          textStyle: { color: theme.tooltipText },
+          extraCssText: 'max-width: min(280px, calc(100vw - 24px)); overflow-wrap: anywhere;'
         };
       }
 
